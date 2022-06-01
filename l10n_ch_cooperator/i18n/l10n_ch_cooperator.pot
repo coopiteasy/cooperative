@@ -21,6 +21,7 @@ msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Association"
 msgstr ""
 
@@ -41,6 +42,7 @@ msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Company under public law"
 msgstr ""
 
@@ -51,21 +53,25 @@ msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Cooperative"
 msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "EURL / Entreprise individuelle"
 msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Foundation"
 msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Individual company"
 msgstr ""
 
@@ -77,17 +83,19 @@ msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "Partnership"
 msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
 #: selection:subscription.request,company_type:0
-msgid "SA"
+msgid "SA / SAS"
 msgstr ""
 
 #. module: l10n_ch_cooperator
 #: selection:res.partner,legal_form:0
+#: selection:subscription.request,company_type:0
 msgid "SARL"
 msgstr ""
 
