@@ -1,7 +1,7 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
-
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import _, api, fields, models
 
@@ -37,7 +37,7 @@ class ResCompany(models.Model):
         comodel_name="account.account",
         string="Cooperator Account",
         domain=[
-            ("internal_type", "=", "receivable"),
+            ("account_type", "=", "asset_receivable"),
             ("deprecated", "=", False),
         ],
         help="This account will be"
@@ -132,15 +132,6 @@ class ResCompany(models.Model):
         ],
         help="If left empty, the default global mail template will be used.",
     )
-    cooperator_confirmation_company_mail_template = fields.Many2one(
-        comodel_name="mail.template",
-        string="Company share confirmation email template",
-        domain=[
-            ("model", "=", "subscription.request"),
-            ("is_cooperator_template", "=", True),
-        ],
-        help="If left empty, the default global mail template will be used.",
-    )
     send_confirmation_email = fields.Boolean(
         string="Send confirmation email", default=True
     )
@@ -204,16 +195,13 @@ class ResCompany(models.Model):
     def _get_cooperator_mail_template_fields(self):
         return {
             "cooperator_confirmation_mail_template": "cooperator.email_template_confirmation",
-            "cooperator_confirmation_company_mail_template": (
-                "cooperator.email_template_confirmation_company"
-            ),
             "cooperator_capital_release_mail_template": (
                 "cooperator.email_template_release_capital"
             ),
             "cooperator_waiting_list_mail_template": "cooperator.email_template_waiting_list",
-            "cooperator_certificate_mail_template": "cooperator.email_template_certificat",
+            "cooperator_certificate_mail_template": "cooperator.email_template_certificate",
             "cooperator_certificate_increase_mail_template": (
-                "cooperator.email_template_certificat_increase"
+                "cooperator.email_template_share_increase"
             ),
             "cooperator_share_transfer_mail_template": (
                 "cooperator.email_template_share_transfer"
@@ -239,11 +227,6 @@ class ResCompany(models.Model):
     def get_cooperator_confirmation_mail_template(self):
         return self._get_cooperator_template("cooperator_confirmation_mail_template")
 
-    def get_cooperator_confirmation_company_mail_template(self):
-        return self._get_cooperator_template(
-            "cooperator_confirmation_company_mail_template"
-        )
-
     def get_cooperator_capital_release_mail_template(self):
         return self._get_cooperator_template("cooperator_capital_release_mail_template")
 
@@ -256,11 +239,25 @@ class ResCompany(models.Model):
     def get_cooperator_share_update_mail_template(self):
         return self._get_cooperator_template("cooperator_share_update_mail_template")
 
-    @api.model
-    def create(self, vals):
-        company = super().create(vals)
-        company._create_cooperator_sequences()
-        return company
+    def get_next_cooperator_number(self):
+        self.ensure_one()
+        return (
+            self.env["ir.sequence"].with_company(self).next_by_code("cooperator.number")
+        )
+
+    def get_next_register_operation_number(self):
+        self.ensure_one()
+        return (
+            self.env["ir.sequence"]
+            .with_company(self)
+            .next_by_code("register.operation")
+        )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._create_cooperator_sequences()
+        return records
 
     @api.model
     def _get_cooperator_sequence_map(self):
@@ -323,7 +320,6 @@ class ResCompany(models.Model):
             # demo data must not be loaded, nothing to do
             return
         account_account_model = self.env["account.account"]
-        receivable_account_type = self.env.ref("account.data_account_type_receivable")
         for company in self:
             if not company._accounting_data_initialized():
                 # same remark as in _init_cooperator_data()
@@ -333,7 +329,7 @@ class ResCompany(models.Model):
                     {
                         "code": "416101",
                         "name": "Cooperators",
-                        "user_type_id": receivable_account_type.id,
+                        "account_type": "asset_receivable",
                         "reconcile": True,
                         "company_id": company.id,
                     }

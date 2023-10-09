@@ -1,11 +1,11 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
-
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from datetime import datetime
 
-from odoo import api, fields, models
+from odoo import fields, models
 
 
 class AccountMove(models.Model):
@@ -24,27 +24,12 @@ class AccountMove(models.Model):
         if not self.release_capital_request:
             return super()._get_starting_sequence()
         starting_sequence = "%s/%04d/000" % (self.journal_id.code, self.date.year)
+        if self.journal_id.refund_sequence and self.move_type in (
+            "out_refund",
+            "in_refund",
+        ):
+            starting_sequence = "R" + starting_sequence
         return starting_sequence
-
-    def _reverse_move_vals(self, default_values, cancel=True):
-        values = super()._reverse_move_vals(default_values, cancel)
-        values["release_capital_request"] = self.release_capital_request
-
-        return values
-
-    def _recompute_payment_terms_lines(self):
-        super()._recompute_payment_terms_lines()
-        subscription_request = self.subscription_request
-        if not subscription_request:
-            return
-        # ensure payment terms lines use the account for subscription requests.
-        payment_terms_lines = self.line_ids.filtered(
-            lambda line: line.account_id.user_type_id.type in ("receivable", "payable")
-        )
-        account = subscription_request.get_accounting_account()
-        for line in payment_terms_lines:
-            if line.account_id != account:
-                line.account_id = account
 
     def create_user(self, partner):
         user_obj = self.env["res.users"]
@@ -91,14 +76,6 @@ class AccountMove(models.Model):
             return self.company_id.get_cooperator_certificate_increase_mail_template()
         return self.company_id.get_cooperator_certificate_mail_template()
 
-    @api.model
-    def get_next_cooperator_number(self):
-        return self.env["ir.sequence"].next_by_code("cooperator.number")
-
-    @api.model
-    def get_next_register_operation(self):
-        return self.env["ir.sequence"].next_by_code("register.operation")
-
     def get_share_line_vals(self, line, effective_date):
         return {
             "share_number": line.quantity,
@@ -128,7 +105,7 @@ class AccountMove(models.Model):
             self.company_id.id
         )
         if not cooperative_membership.member and not cooperative_membership.old_member:
-            sub_reg_num = self.get_next_cooperator_number()
+            sub_reg_num = self.company_id.get_next_cooperator_number()
             vals = {
                 "member": True,
                 "old_member": False,
@@ -148,7 +125,9 @@ class AccountMove(models.Model):
     def _send_certificate_mail(self, certificate_email_template, sub_reg_line):
         if self.company_id.send_certificate_email:
             # we send the email with the certificate in attachment
-            certificate_email_template.sudo().send_mail(self.partner_id.id, False)
+            certificate_email_template.sudo().send_mail(
+                self.partner_id.id, email_layout_xmlid="mail.mail_notification_layout"
+            )
 
     def set_cooperator_effective(self, effective_date):
         sub_register_obj = self.env["subscription.register"]
@@ -158,7 +137,7 @@ class AccountMove(models.Model):
 
         self.set_membership()
 
-        sub_reg_operation = self.get_next_register_operation()
+        sub_reg_operation = self.company_id.get_next_register_operation_number()
 
         for line in self.invoice_line_ids:
             sub_reg_vals = self.get_subscription_register_vals(line, effective_date)
@@ -193,26 +172,34 @@ class AccountMove(models.Model):
 
     def _get_payment_account_moves(self):
         reconciled_lines = self.line_ids.filtered(
-            lambda line: line.account_id.user_type_id.type == "receivable"
+            lambda line: line.account_id.account_type == "asset_receivable"
         )
         reconciled_amls = reconciled_lines.mapped("matched_credit_ids.credit_move_id")
         return reconciled_amls.move_id
 
-    def action_invoice_paid(self):
-        super().action_invoice_paid()
+    def _invoice_paid_hook(self):
+        result = super()._invoice_paid_hook()
         for invoice in self:
+            cooperative_membership = invoice.partner_id.get_cooperative_membership(
+                invoice.company_id.id
+            )
+            if not (
+                invoice.move_type == "out_invoice"
+                and invoice.release_capital_request
+                and cooperative_membership
+                and cooperative_membership.cooperator
+            ):
+                continue
+
             # we check if there is an open refund for this invoice. in this
             # case we don't run the process_subscription function as the
             # invoice has been reconciled with a refund and not a payment.
             domain = self.get_refund_domain(invoice)
             refund = self.search(domain)
-
-            if (
-                invoice.partner_id.cooperator
-                and invoice.release_capital_request
-                and invoice.move_type == "out_invoice"
-                and not refund
-            ):
+            if refund:
+                # if there is a open refund we mark the subscription as cancelled
+                invoice.subscription_request.state = "cancelled"
+            else:
                 # take the effective date from the payment.
                 # by default the confirmation date is the payment date
                 effective_date = datetime.now()
@@ -224,15 +211,7 @@ class AccountMove(models.Model):
 
                 invoice.subscription_request.state = "paid"
                 invoice.post_process_confirm_paid(effective_date)
-            # if there is a open refund we mark the subscription as cancelled
-            elif (
-                invoice.partner_id.cooperator
-                and invoice.release_capital_request
-                and invoice.move_type == "out_invoice"
-                and refund
-            ):
-                invoice.subscription_request.state = "cancelled"
-        return True
+        return result
 
     def _get_capital_release_mail_template(self):
         return self.company_id.get_cooperator_capital_release_mail_template()
@@ -242,4 +221,6 @@ class AccountMove(models.Model):
             email_template = self._get_capital_release_mail_template()
             # we send the email with the capital release request in attachment
             # TODO remove sudo() and give necessary access right
-            email_template.sudo().send_mail(self.id, True)
+            email_template.sudo().send_mail(
+                self.id, email_layout_xmlid="mail.mail_notification_layout"
+            )

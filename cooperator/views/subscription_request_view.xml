@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
+<!--
+SPDX-FileCopyrightText: 2017 Open Architects Consulting SPRL
+SPDX-FileCopyrightText: 2018 Coop IT Easy SC
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 <odoo>
 
     <record id="subscription_request_tree" model="ir.ui.view">
@@ -99,22 +105,27 @@
                                 name="is_company"
                                 groups="cooperator.cooperator_group_manager"
                             />
+                            <field
+                                name="is_company"
+                                groups="!cooperator.cooperator_group_manager"
+                                invisible="True"
+                            />
                             <field name="is_operation" invisible="True" />
                             <field
                                 name="company_name"
-                                attrs="{'invisible':[('is_company','=',False)]}"
+                                attrs="{'invisible': [('is_company', '=', False)], 'required': [('is_company', '=', True)]}"
                             />
                             <field
                                 name="company_email"
-                                attrs="{'invisible':[('is_company','=',False)]}"
+                                attrs="{'invisible': [('is_company', '=', False)], 'required': [('is_company', '=', True)]}"
                             />
                             <field
                                 name="company_type"
-                                attrs="{'invisible':[('is_company','=',False)]}"
+                                attrs="{'invisible': [('is_company', '=', False)]}"
                             />
                             <field
                                 name="company_register_number"
-                                attrs="{'invisible':[('is_company','=',False)]}"
+                                attrs="{'invisible': [('is_company', '=', False)], 'required': [('is_company', '=', True)]}"
                             />
                             <field name="firstname" />
                             <field name="lastname" />
@@ -160,6 +171,11 @@
                                 name="company_id"
                                 groups="base.group_multi_company"
                                 attrs="{'readonly': [('id', '!=', False)]}"
+                            />
+                            <field
+                                name="company_id"
+                                groups="!base.group_multi_company"
+                                invisible="True"
                             />
                         </group>
                     </group>

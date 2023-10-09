@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-     Copyright 2019 Coop IT Easy
-     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
+SPDX-FileCopyrightText: 2017 Open Architects Consulting SPRL
+SPDX-FileCopyrightText: 2018 Coop IT Easy SC
+
+SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <odoo>
 
@@ -24,72 +26,71 @@
 
             <xpath expr="/form/sheet/group" position='before'>
                 <group>
-                    <group>
-                        <field name="member" invisible="1" />
-                        <field
-                            name="representative"
-                            attrs="{'invisible':['|',('parent_id','=',False),('is_company','=',True)]}"
-                        />
-                        <field
-                            name="legal_form"
-                            attrs="{'invisible':[('is_company','=',False)]}"
-                        />
+                    <field name="cooperator" invisible="true" />
+                    <group
+                        groups="cooperator.cooperator_group_user"
+                        attrs="{'invisible': [('cooperator', '=', False)]}"
+                    >
                         <field
                             name="cooperator_register_number"
-                            readonly="True"
-                            attrs="{'invisible':[('member','=',False)]}"
+                            attrs="{'invisible': [('member', '=', False)]}"
                         />
-                        <field
-                            name="company_register_number"
-                            readonly="True"
-                            attrs="{'invisible':[('is_company','=',False)]}"
-                        />
-                        <field
-                            name="coop_candidate"
-                            groups="cooperator.cooperator_group_user"
-                        />
-                        <field
-                            name="cooperator"
-                            invisible="True"
-                            groups="cooperator.cooperator_group_manager"
-                        />
-                        <field
-                            name="member"
-                            groups="cooperator.cooperator_group_manager"
-                        />
+                        <field name="coop_candidate" />
+                        <field name="member" />
                         <field
                             name="cooperator_type"
-                            attrs="{'invisible':[('member','=',False)]}"
+                            attrs="{'invisible': [('member', '=', False)]}"
                         />
                         <field
                             name="effective_date"
-                            attrs="{'invisible':[('member','=',False)]}"
-                        />
-                    </group>
-                    <group>
-                        <field
-                            name="gender"
-                            attrs="{'invisible':[('is_company','=',True)]}"
+                            attrs="{'invisible': [('member', '=', False)]}"
                         />
                     </group>
                     <group
                         name="approvals"
-                        attrs="{'invisible':[('cooperator','=',False)]}"
+                        groups="cooperator.cooperator_group_user"
+                        attrs="{'invisible': [('cooperator', '=', False)]}"
                     >
-                        <field name="internal_rules_approved" />
-                        <field name="data_policy_approved" />
-                        <field name="financial_risk_approved" />
-                        <field name="generic_rules_approved" />
+                        <field
+                            name="internal_rules_approved"
+                            attrs="{'readonly': [('cooperator', '=', False)]}"
+                        />
+                        <field
+                            name="data_policy_approved"
+                            attrs="{'readonly': [('cooperator', '=', False)]}"
+                        />
+                        <field
+                            name="financial_risk_approved"
+                            attrs="{'readonly': [('cooperator', '=', False)]}"
+                        />
+                        <field
+                            name="generic_rules_approved"
+                            attrs="{'readonly': [('cooperator', '=', False)]}"
+                        />
+                    </group>
+                    <group>
+                        <field
+                            name="representative"
+                            attrs="{'invisible': ['|', ('parent_id', '=', False), ('is_company', '=', True)]}"
+                        />
+                        <field
+                            name="legal_form"
+                            attrs="{'invisible': [('is_company', '=', False)]}"
+                        />
+                        <field
+                            name="company_register_number"
+                            attrs="{'invisible': [('is_company', '=', False)], 'readonly': [('id', '!=', False)]}"
+                        />
                     </group>
                 </group>
             </xpath>
 
-            <page name='sales_purchases' position="after">
+            <page name="sales_purchases" position="after">
                 <field name="member" invisible="1" />
                 <page
                     string="Shares"
                     name="share"
-                    attrs="{'invisible':[('member','=',False)]}"
+                    attrs="{'invisible': [('member', '=', False)]}"
                     groups="cooperator.cooperator_group_user"
                 >
                     <group>
@@ -116,7 +117,7 @@
                 <page
                     string="Share subscriptions"
                     name="share_subscription"
-                    attrs="{'invisible':[('cooperator','=',False)]}"
+                    attrs="{'invisible': [('cooperator', '=', False)]}"
                     groups="cooperator.cooperator_group_user"
                 >
                     <field name="subscription_request_ids">
@@ -141,19 +142,6 @@
         </field>
     </record>
 
-    <record id="view_partner_tree" model="ir.ui.view">
-        <field name="name">view_partner_tree</field>
-        <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_partner_tree" />
-        <field name="arch" type="xml">
-            <xpath expr="/tree/field[@name='display_name']" position='after'>
-                <field name="cooperator_register_number" />
-                <field name="cooperator_type" />
-                <field name="effective_date" />
-            </xpath>
-        </field>
-    </record>
-
     <record id="view_res_partner_filter" model="ir.ui.view">
         <field name="name">res.partner.select</field>
         <field name="model">res.partner</field>
@@ -162,21 +150,23 @@
             <filter name="supplier" position='after'>
                 <filter
                     string="Cooperators"
-                    name="cooperators"
+                    name="cooperator"
                     domain="[('cooperative_membership_ids.member', '=' , True)]"
-                    help="Cooperator Partners"
-                />
-                <filter
-                    string="Old Cooperators"
-                    name="old_cooperators"
-                    domain="[('cooperative_membership_ids.old_member', '=', True)]"
-                    help="Cooperator Partners"
                 />
                 <filter
                     string="Cooperator Candidates"
-                    name="cooperator_candidates"
+                    name="cooperator_candidate"
                     domain="[('cooperative_membership_ids.coop_candidate', '=', True)]"
-                    help="Cooperator Partners"
+                />
+                <filter
+                    string="Old Cooperators"
+                    name="old_cooperator"
+                    domain="[('cooperative_membership_ids.old_member', '=', True)]"
+                />
+                <filter
+                    string="Company Representatives"
+                    name="cooperator_company_representative"
+                    domain="[('representative_of_member_company', '=', True)]"
                 />
             </filter>
             <!--
@@ -201,50 +191,47 @@
     </record>
 
     <record id="action_partner_cooperator_form" model="ir.actions.act_window">
-        <field name="name">Cooperators</field>
+        <field name="name">Contacts</field>
         <field name="res_model">res.partner</field>
         <field name="view_mode">kanban,tree,form</field>
-        <field name="domain">[('cooperative_membership_ids.member', '=', True)]</field>
-        <field name="context">{'create':False}</field>
+        <field name="context">
+            {
+                "create": False,
+                "search_default_cooperator": True,
+            }
+        </field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Cooperators
-            </p><p>
-                Odoo helps you track all activities related to your cooperators.
-            </p>
+            <p class="o_view_nocontent_neutral_face">No contacts found</p>
         </field>
     </record>
 
     <record id="action_partner_cooperator_candidate_form" model="ir.actions.act_window">
-        <field name="name">Cooperator candidates</field>
-        <field name="type">ir.actions.act_window</field>
+        <field name="name">Contacts</field>
         <field name="res_model">res.partner</field>
         <field name="view_mode">kanban,tree,form</field>
-        <field name="domain">[('coop_candidate', '=',True)]</field>
-        <field name="context">{'create':False}</field>
-        <field name="filter" eval="True" />
+        <field name="context">
+            {
+                "create": False,
+                "search_default_cooperator_candidate": True,
+            }
+        </field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Cooperator candidates
-            </p><p>
-                Odoo helps you track all activities related to your cooperators.
-            </p>
+            <p class="o_view_nocontent_neutral_face">No contacts found</p>
         </field>
     </record>
 
     <record id="action_company_representative_form" model="ir.actions.act_window">
-        <field name="name">Company representative</field>
-        <field name="type">ir.actions.act_window</field>
+        <field name="name">Contacts</field>
         <field name="res_model">res.partner</field>
         <field name="view_mode">kanban,tree,form</field>
-        <field name="domain">[('representative_of_member_company','=',True)]</field>
-        <field name="filter" eval="True" />
+        <field name="context">
+            {
+                "create": False,
+                "search_default_cooperator_company_representative": True,
+            }
+        </field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Company representative
-            </p><p>
-                Odoo helps you track all activities related to your cooperators.
-            </p>
+            <p class="o_view_nocontent_neutral_face">No contacts found</p>
         </field>
     </record>
 

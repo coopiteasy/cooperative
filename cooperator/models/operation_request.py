@@ -1,9 +1,7 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
-
-
-from datetime import datetime
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
@@ -14,10 +12,6 @@ class OperationRequest(models.Model):
     _description = "Operation request"
     _check_company_auto = True
 
-    def get_date_now(self):
-        # fixme odoo 12 uses date types
-        return datetime.strftime(datetime.now(), "%Y-%m-%d")
-
     @api.depends("share_product_id", "share_product_id.list_price", "quantity")
     def _compute_subscription_amount(self):
         for operation_request in self:
@@ -26,9 +20,7 @@ class OperationRequest(models.Model):
                 * operation_request.quantity
             )
 
-    request_date = fields.Date(
-        string="Request date", default=lambda self: self.get_date_now()
-    )
+    request_date = fields.Date(string="Request date", default=fields.Date.today)
     effective_date = fields.Date(string="Effective date")
     partner_id = fields.Many2one(
         "res.partner",
@@ -43,7 +35,6 @@ class OperationRequest(models.Model):
     )
     operation_type = fields.Selection(
         [
-            ("subscription", "Subscription"),
             ("transfer", "Transfer"),
             ("sell_back", "Sell Back"),
             ("convert", "Conversion"),
@@ -98,6 +89,18 @@ class OperationRequest(models.Model):
         default=lambda self: self.env.user,
         check_company=True,
     )
+    # fixme: this field should be removed. it is only used for transfer
+    # operations just to hold the values to create a new partner from. using a
+    # subscription request for this causes several problems: it appears in the
+    # list of subscription requests while it is not a real one and it sends an
+    # email message to the receiver when it is created. instead, a partner
+    # should be created. the problem with using a partner, though, (besides
+    # creating a partner that might never be used if the the operation is
+    # never executed) is that it cannot hold the extra values coming from the
+    # subscription request and not stored on the partner or on the
+    # cooperative.membership, like the iban (is it the only one?). should we
+    # use a separate model that would be used here and in subscription.request
+    # (possibly as a mixin)?
     subscription_request = fields.One2many(
         "subscription.request",
         "operation_request_id",
@@ -119,6 +122,32 @@ class OperationRequest(models.Model):
     )
 
     invoice = fields.Many2one("account.move", check_company=True)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        for record in records:
+            if record.subscription_request:
+                if not record.subscription_request.is_operation:
+                    raise ValidationError(
+                        _(
+                            "The is_operation field of the subscription "
+                            "request must be true"
+                        )
+                    )
+                if record.subscription_request.source != "operation":
+                    raise ValidationError(
+                        _(
+                            "The source field of the subscription request "
+                            "must be set to operation"
+                        )
+                    )
+                if (
+                    record.operation_type == "transfer"
+                    and record.subscription_request.state != "transfer"
+                ):
+                    record.subscription_request.state = "transfer"
+        return records
 
     @api.constrains("effective_date")
     def _constrain_effective_date(self):
@@ -215,26 +244,23 @@ class OperationRequest(models.Model):
 
             if self.quantity > total_share_dic[self.share_product_id.id]:
                 raise ValidationError(
-                    _("The cooperator can't hand over more" " shares that he/she owns.")
+                    _("The cooperator can't hand over more shares that he/she owns.")
                 )
 
         if self.operation_type == "convert":
             if self.company_id.unmix_share_type:
                 if self.share_product_id.code == self.share_to_product_id.code:
                     raise ValidationError(
-                        _("You can't convert the share to" " the same share type.")
+                        _("You can't convert the share to the same share type.")
                     )
                 if self.subscription_amount != self.partner_id.total_value:
                     raise ValidationError(
-                        _("You must convert all the shares" " to the selected type.")
+                        _("You must convert all the shares to the selected type.")
                     )
             else:
                 if self.subscription_amount != self.partner_id.total_value:
                     raise ValidationError(
-                        _(
-                            "Converting just part of the"
-                            " shares is not yet implemented"
-                        )
+                        _("Converting just part of the shares is not yet implemented")
                     )
         elif self.operation_type == "transfer":
             if (
@@ -254,14 +280,14 @@ class OperationRequest(models.Model):
                 )
             if self.partner_id_to.is_company and not self.share_product_id.by_company:
                 raise ValidationError(
-                    _("This share can not be" " subscribed by a company")
+                    _("This share can not be subscribed by a company")
                 )
             if (
                 not self.partner_id_to.is_company
                 and not self.share_product_id.by_individual
             ):
                 raise ValidationError(
-                    _("This share can not be" " subscribed an individual")
+                    _("This share can not be subscribed an individual")
                 )
             if (
                 self.receiver_not_member
@@ -288,14 +314,19 @@ class OperationRequest(models.Model):
     ):  # fixme unused argument is used in synergie project. Do not remove.
         if self.company_id.send_share_transfer_email:
             cert_email_template = self._get_share_transfer_mail_template()
-            cert_email_template.send_mail(self.partner_id_to.id, False)
+            cert_email_template.send_mail(
+                self.partner_id_to.id,
+                email_layout_xmlid="mail.mail_notification_layout",
+            )
 
     def _send_share_update_mail(
         self, sub_register_line
     ):  # fixme unused argument is used in synergie project. Do not remove.
         if self.company_id.send_share_update_email:
             cert_email_template = self._get_share_update_mail_template()
-            cert_email_template.send_mail(self.partner_id.id, False)
+            cert_email_template.send_mail(
+                self.partner_id.id, email_layout_xmlid="mail.mail_notification_layout"
+            )
 
     def get_subscription_register_vals(self, effective_date):
         return {
@@ -310,21 +341,18 @@ class OperationRequest(models.Model):
     def execute_operation(self):
         self.ensure_one()
 
-        if self.effective_date:
-            effective_date = self.effective_date
-        else:
-            effective_date = self.get_date_now()
-            self.effective_date = effective_date
+        if not self.effective_date:
+            self.effective_date = fields.Date.today()
         sub_request = self.env["subscription.request"]
 
         self.validate()
 
         if self.state != "approved":
             raise ValidationError(
-                _("This operation must be approved" " before to be executed")
+                _("This operation must be approved before to be executed")
             )
 
-        values = self.get_subscription_register_vals(effective_date)
+        values = self.get_subscription_register_vals(self.effective_date)
 
         if self.operation_type == "sell_back":
             self.hand_share_over(self.partner_id, self.share_product_id, self.quantity)
@@ -350,27 +378,30 @@ class OperationRequest(models.Model):
                 values["quantity_to"] = convert_quant
             else:
                 raise ValidationError(
-                    _("Converting just part of the" " shares is not yet implemented")
+                    _("Converting just part of the shares is not yet implemented")
                 )
         elif self.operation_type == "transfer":
             partner_vals = {"member": True}
             if self.receiver_not_member:
-                partner = self.subscription_request.create_coop_partner()
-                sub_reg_num = self.env["ir.sequence"].next_by_code("cooperator.number")
+                partner = self.subscription_request.setup_partner()
+                self.subscription_request.state = "done"
+                cooperator_number = self.company_id.get_next_cooperator_number()
+                # fixme: get_eater_vals() is really specific and should not be
+                # called from here.
                 partner_vals.update(
                     sub_request.get_eater_vals(partner, self.share_product_id)
                 )
-                partner_vals["cooperator_register_number"] = sub_reg_num
+                partner_vals["cooperator_register_number"] = cooperator_number
                 partner.write(partner_vals)
                 self.partner_id_to = partner
             else:
                 # means an old member or cooperator candidate
                 if not self.partner_id_to.member:
                     if self.partner_id_to.cooperator_register_number == 0:
-                        sub_reg_num = self.env["ir.sequence"].next_by_code(
-                            "cooperator.number"
-                        )
-                        partner_vals["cooperator_register_number"] = sub_reg_num
+                        cooperator_number = self.company_id.get_next_cooperator_number()
+                        partner_vals["cooperator_register_number"] = cooperator_number
+                    # fixme: get_eater_vals() is really specific and should
+                    # not be called from here.
                     partner_vals.update(
                         sub_request.get_eater_vals(
                             self.partner_id_to, self.share_product_id
@@ -387,15 +418,15 @@ class OperationRequest(models.Model):
                     "partner_id": self.partner_id_to.id,
                     "share_product_id": self.share_product_id.id,
                     "share_unit_price": self.share_unit_price,
-                    "effective_date": effective_date,
+                    "effective_date": self.effective_date,
                     "company_id": self.company_id.id,
                 }
             )
             values["partner_id_to"] = self.partner_id_to.id
         else:
-            raise ValidationError(_("This operation is not yet" " implemented."))
+            raise ValidationError(_("This operation is not yet implemented."))
 
-        sub_reg_operation = self.env["ir.sequence"].next_by_code("register.operation")
+        sub_reg_operation = self.company_id.get_next_register_operation_number()
         values["name"] = sub_reg_operation
         values["register_number_operation"] = int(sub_reg_operation)
 

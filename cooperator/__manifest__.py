@@ -1,13 +1,14 @@
-# Copyright 2013-2018 Open Architects Consulting SPRL.
-# Copyright 2018      Coop IT Easy SC (<http://www.coopiteasy.be>)
-#   Houssine BAKKALI <houssine@coopiteasy.be>
-#   Robin Keunen <robin@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+# SPDX-FileCopyrightText: 2013 - 2018 Open Architects Consulting SPRL
+# SPDX-FileCopyrightText: 2018 Coop IT Easy SC
+# SPDX-FileContributor: Houssine BAKKALI <houssine@coopiteasy.be>
+# SPDX-FileContributor: Robin Keunen <robin@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 {
     "name": "Cooperators",
     "summary": "Manage your cooperators",
-    "version": "15.0.1.0.0",
+    "version": "16.0.1.0.0",
     "depends": [
         "account",
         "base_iban",
@@ -29,7 +30,7 @@
         "security/res_groups.xml",
         "security/ir.model.access.csv",
         "security/ir_rule.xml",
-        "wizard/create_subscription_from_partner.xml",
+        "wizard/partner_create_subscription.xml",
         "wizard/validate_subscription_request.xml",
         "wizard/update_share_line.xml",
         "views/subscription_request_view.xml",
@@ -41,13 +42,14 @@
         "views/product_view.xml",
         "views/res_company_view.xml",
         "views/account_journal_views.xml",
+        "views/cooperative_membership_view.xml",
         "views/menus.xml",
         "report/reports.xml",
         "report/layout.xml",
-        "report/cooperator_invoice_G002.xml",
-        "report/cooperator_certificat_G001.xml",
-        "report/cooperator_subscription_G001.xml",
-        "report/cooperator_register_G001.xml",
+        "report/report_invoice.xml",
+        "report/report_cooperator_certificate.xml",
+        "report/report_subscription_register.xml",
+        "report/report_cooperator_register.xml",
         "data/mail_template_data.xml",  # Must be loaded after reports
     ],
     "demo": [

@@ -1,8 +1,8 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
-import warnings
 from datetime import date
 
 from odoo import _, api, fields, models
@@ -52,11 +52,6 @@ class SubscriptionRequest(models.Model):
             required_fields.append("generic_rules_approved")
         return required_fields
 
-    def get_mail_template_notif(self, is_company=False):
-        if is_company:
-            return self.company_id.get_cooperator_confirmation_company_mail_template()
-        return self.company_id.get_cooperator_confirmation_mail_template()
-
     @api.constrains("share_product_id", "is_company")
     def _check_share_available_to_user(self):
         for request in self:
@@ -71,15 +66,24 @@ class SubscriptionRequest(models.Model):
                     % request.share_product_id.name
                 )
 
+    @api.constrains("email", "company_email")
+    def _check_company_and_representative_email_different(self):
+        for record in self:
+            if record.email == record.company_email:
+                raise ValidationError(_("Email and Company Email must be different."))
+
     def _send_confirmation_mail(self):
-        if self.company_id.send_confirmation_email:
-            mail_template_notif = self.get_mail_template_notif(
-                is_company=self.is_company
+        if self.company_id.send_confirmation_email and not self.is_operation:
+            mail_template_notif = (
+                self.company_id.get_cooperator_confirmation_mail_template()
             )
             # sudo is needed to change state of invoice linked to a request
             #  sent through the api
-            mail_template_notif.sudo().send_mail(self.id)
+            mail_template_notif.sudo().send_mail(
+                self.id, email_layout_xmlid="mail.mail_notification_layout"
+            )
 
+    @api.model
     def _find_partner_from_create_vals(self, vals):
         """
         Find the partner corresponding to the vals dict.
@@ -103,51 +107,45 @@ class SubscriptionRequest(models.Model):
         return partner
 
     @api.model
-    def create(self, vals):
-        partner = self._find_partner_from_create_vals(vals)
-        if partner:
-            company_id = vals.get("company_id", self.env.company.id)
-            cooperative_membership = partner.get_cooperative_membership(company_id)
-            member = cooperative_membership and cooperative_membership.member
-            pending_requests_domain = [
-                ("company_id", "=", company_id),
-                ("partner_id", "=", partner.id),
-                ("state", "in", ("draft", "waiting", "done")),
-            ]
-            # we don't use partner.coop_candidate because we want to also
-            # handle draft and waiting requests.
-            if member or self.search(pending_requests_domain):
-                vals["type"] = "increase"
-            if member:
-                vals["already_cooperator"] = True
-            if not cooperative_membership:
-                cooperative_membership = partner.create_cooperative_membership(
-                    company_id
-                )
-            elif not cooperative_membership.cooperator:
-                cooperative_membership.cooperator = True
+    def _adapt_create_vals_and_membership_from_partner(self, vals, partner):
+        """
+        Check for existing cooperative membership for the partner, create or
+        update it if needed and set vals accordingly.
+        """
+        company_id = vals.get("company_id", self.env.company.id)
+        cooperative_membership = partner.get_cooperative_membership(company_id)
+        member = cooperative_membership and cooperative_membership.member
+        pending_requests_domain = [
+            ("company_id", "=", company_id),
+            ("partner_id", "=", partner.id),
+            ("state", "in", ("draft", "waiting", "done")),
+        ]
+        # we don't use partner.coop_candidate because we want to also
+        # handle draft and waiting requests.
+        if member or self.search(pending_requests_domain):
+            vals["type"] = "increase"
+        if member:
+            vals["already_cooperator"] = True
+        if not cooperative_membership:
+            cooperative_membership = partner.create_cooperative_membership(company_id)
+        elif not cooperative_membership.cooperator:
+            cooperative_membership.cooperator = True
 
-        subscription_request = super().create(vals)
-        # TODO: This should probably not be in the create method. There may need
-        # to be a stage after draft in which this e-mail is sent, or the e-mail
-        # should exclusively be sent from `cooperator_website`. See #73 for
-        # some comments, and for a reverted implementation of the extra state.
-        subscription_request._send_confirmation_mail()
-        return subscription_request
-
-    @api.model
-    def create_comp_sub_req(self, vals):
-        warnings.warn(
-            "subscription.request.create_comp_sub_req() is deprecated. "
-            "please use .create() instead.",
-            DeprecationWarning,
-        )
-        return self.create(vals)
-
-    def check_empty_string(self, value):
-        if value is None or value is False or value == "":
-            return False
-        return True
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = self.browse()
+        for vals in vals_list:
+            partner = self._find_partner_from_create_vals(vals)
+            if partner:
+                self._adapt_create_vals_and_membership_from_partner(vals, partner)
+            subscription_request = super().create(vals)
+            # TODO: This should probably not be in the create method. There may need
+            # to be a stage after draft in which this e-mail is sent, or the e-mail
+            # should exclusively be sent from `cooperator_website`. See #73 for
+            # some comments, and for a reverted implementation of the extra state.
+            subscription_request._send_confirmation_mail()
+            records += subscription_request
+        return records
 
     def check_iban(self, iban):
         if not iban:
@@ -232,12 +230,16 @@ class SubscriptionRequest(models.Model):
     state = fields.Selection(
         [
             ("draft", "Draft"),
-            ("block", "Blocked"),  # todo reword to blocked
+            ("blocked", "Blocked"),
             ("done", "Done"),
             ("waiting", "Waiting"),
+            # fixme: this is only used when a subscription request is used for
+            # a transfer operation. once operation.request has been changed to
+            # not use a subscription request anymore, this state should be
+            # removed.
             ("transfer", "Transfer"),
             ("cancelled", "Cancelled"),
-            ("paid", "paid"),
+            ("paid", "Paid"),
         ],
         required=True,
         default="draft",
@@ -507,11 +509,12 @@ class SubscriptionRequest(models.Model):
             else:
                 self.get_person_info(partner)
 
+    # fixme: this is very specific and should not be here.
     # declare this function in order to be overriden
     def get_eater_vals(self, partner, share_product_id):  # noqa
         return {}
 
-    def _prepare_invoice_line(self, product, partner, qty):
+    def _prepare_invoice_line(self, move_id, product, partner, qty):
         self.ensure_one()
         # .with_company() is needed to allow to validate a subscription
         # request for a company other than the current one, which can happen
@@ -537,6 +540,7 @@ class SubscriptionRequest(models.Model):
 
         res = {
             "name": product.name,
+            "move_id": move_id,
             "account_id": account.id,
             "price_unit": product.lst_price,
             "quantity": qty,
@@ -594,13 +598,11 @@ class SubscriptionRequest(models.Model):
             invoice_vals["invoice_date"] = self.capital_release_request_date
         invoice = self.env["account.move"].create(invoice_vals)
         vals = self._prepare_invoice_line(
-            self.share_product_id, partner, self.ordered_parts
+            invoice.id, self.share_product_id, partner, self.ordered_parts
         )
-        vals["move_id"] = invoice.id
         self.env["account.move.line"].with_context(check_move_validity=False).create(
             vals
         )
-        invoice.with_context(check_move_validity=False)._onchange_invoice_line_ids()
 
         # validate the capital release request
         invoice.action_post()
@@ -612,7 +614,8 @@ class SubscriptionRequest(models.Model):
         partner_vals = {
             "name": self.company_name,
             "is_company": self.is_company,
-            "company_register_number": self.company_register_number,  # noqa
+            "company_register_number": self.company_register_number,
+            "legal_form": self.company_type,
             "street": self.address,
             "zip": self.zip_code,
             "city": self.city,
@@ -802,17 +805,11 @@ class SubscriptionRequest(models.Model):
             else:
                 contact.write({"parent_id": self.partner_id.id, "representative": True})
 
-    def validate_subscription_request(self):
-        # todo rename to validate (careful with iwp dependencies)
-        self.ensure_one()
-        if self.state not in ("draft", "waiting"):
-            raise ValidationError(
-                _("The request must be in draft or on waiting list to be validated")
-            )
-
-        if self.ordered_parts <= 0:
-            raise UserError(_("Number of share must be greater than 0."))
-
+    def setup_partner(self):
+        """
+        Ensure a partner with all required properties is linked to this
+        subscription request (creating one if necessary) and return it.
+        """
         # fixme: when re-using an existing partner (as self.partner_id or as a
         # representative), their values are not updated with the values of the
         # subscription request. this includes partner information (name,
@@ -832,6 +829,21 @@ class SubscriptionRequest(models.Model):
 
         if self.is_company and not partner.has_representative():
             self._find_or_create_representative()
+
+        return partner
+
+    def validate_subscription_request(self):
+        # todo rename to validate (careful with iwp dependencies)
+        self.ensure_one()
+        if self.state not in ("draft", "waiting"):
+            raise ValidationError(
+                _("The request must be in draft or on waiting list to be validated")
+            )
+
+        if self.ordered_parts <= 0:
+            raise UserError(_("Number of share must be greater than 0."))
+
+        partner = self.setup_partner()
 
         invoice = self.create_invoice(partner)
         self.write({"state": "done"})
@@ -862,7 +874,9 @@ class SubscriptionRequest(models.Model):
             waiting_list_mail_template = (
                 self.company_id.get_cooperator_waiting_list_mail_template()
             )
-            waiting_list_mail_template.send_mail(self.id, True)
+            waiting_list_mail_template.send_mail(
+                self.id, email_layout_xmlid="mail.mail_notification_layout"
+            )
 
     def put_on_waiting_list(self):
         self.ensure_one()

@@ -1,6 +1,7 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Robin Keunen <robin@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Robin Keunen <robin@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from datetime import date, datetime, timedelta
 
@@ -12,11 +13,15 @@ class CooperatorTestMixin:
         cls.company = cls.env.ref("base.main_company")
         cls.company.coop_email_contact = "coop_email@example.org"
         cls.demo_partner = cls.env.ref("base.partner_demo")
+        company_share_category = cls.env.ref(
+            "cooperator.product_category_company_share"
+        )
         cls.share_x = cls.env["product.product"].create(
             {
                 "name": "Share X - Founder",
-                "short_name": "Part X",
+                "short_name": "Share X",
                 "default_code": "share_x",
+                "categ_id": company_share_category.id,
                 "is_share": True,
                 "by_individual": True,
                 "by_company": False,
@@ -26,8 +31,9 @@ class CooperatorTestMixin:
         cls.share_y = cls.env["product.product"].create(
             {
                 "name": "Share Y - Worker",
-                "short_name": "Part Y",
+                "short_name": "Share Y",
                 "default_code": "share_y",
+                "categ_id": company_share_category.id,
                 "is_share": True,
                 "default_share_product": True,
                 "by_individual": True,
@@ -81,7 +87,7 @@ class CooperatorTestMixin:
             .with_context(**ctx)
             .create(register_payments_vals)
         )
-        register_payment.with_company(invoice.company_id).action_create_payments()
+        register_payment.action_create_payments()
 
     def create_payment_account_move(self, invoice, date, amount=None):
         if amount is None:
@@ -121,7 +127,7 @@ class CooperatorTestMixin:
             }
         )
         am.action_post()
-        (invoice.line_ids[1] + am.line_ids[1]).reconcile()
+        (invoice.line_ids[-1] + am.line_ids[-1]).reconcile()
         return am
 
     def get_dummy_subscription_requests_vals(self):
@@ -145,12 +151,26 @@ class CooperatorTestMixin:
 
     def get_dummy_company_subscription_requests_vals(self):
         vals = self.get_dummy_subscription_requests_vals()
-        vals["is_company"] = True
-        vals["company_name"] = "dummy company"
-        vals["company_email"] = "companyemail@example.net"
-        vals["company_register_number"] = "dummy company register number"
-        vals["contact_person_function"] = "dummy contact person function"
+        vals.update(
+            {
+                "is_company": True,
+                "company_name": "dummy company",
+                "company_email": "companyemail@example.net",
+                "company_register_number": "dummy company register number",
+                "contact_person_function": "dummy contact person function",
+            }
+        )
         return vals
+
+    def create_dummy_subscription_request(self):
+        return self.env["subscription.request"].create(
+            self.get_dummy_subscription_requests_vals()
+        )
+
+    def create_dummy_company_subscription_request(self):
+        return self.env["subscription.request"].create(
+            self.get_dummy_company_subscription_requests_vals()
+        )
 
     def create_dummy_subscription_from_partner(self, partner):
         vals = self.get_dummy_subscription_requests_vals()
@@ -167,24 +187,11 @@ class CooperatorTestMixin:
         self.pay_invoice(subscription_request.capital_release_request)
 
     def create_dummy_cooperator(self):
-        partner = self.env["res.partner"].create(
-            {
-                "name": "dummy partner 1",
-            }
-        )
-        subscription_request = self.create_dummy_subscription_from_partner(partner)
+        subscription_request = self.create_dummy_subscription_request()
         self.validate_subscription_request_and_pay(subscription_request)
-        return partner
+        return subscription_request.partner_id
 
     def create_dummy_company_cooperator(self):
-        partner = self.env["res.partner"].create(
-            {
-                "name": "dummy company partner 1",
-                "is_company": True,
-            }
-        )
-        subscription_request = self.create_dummy_subscription_from_company_partner(
-            partner
-        )
+        subscription_request = self.create_dummy_company_subscription_request()
         self.validate_subscription_request_and_pay(subscription_request)
-        return partner
+        return subscription_request.partner_id

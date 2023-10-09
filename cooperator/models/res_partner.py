@@ -1,7 +1,7 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
-
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
@@ -128,6 +128,7 @@ class ResPartner(models.Model):
         "cooperator",
         fields.Boolean,
         help="Check this box if this contact is a cooperator (effective or not).",
+        readonly=True,
     )
     member = cooperative_membership_field(
         "member",
@@ -147,6 +148,7 @@ class ResPartner(models.Model):
         fields.Boolean,
         string="Old cooperator",
         help="Check this box if this cooperator is no more an effective member.",
+        readonly=True,
     )
     share_ids = fields.One2many("share.line", "partner_id", string="Share Lines")
     cooperator_register_number = cooperative_membership_field(
@@ -222,10 +224,7 @@ class ResPartner(models.Model):
         return super().onchange_parent_id()
 
     def has_representative(self):
-        self.ensure_one()
-        if self.child_ids.filtered("representative"):
-            return True
-        return False
+        return bool(self.get_representative())
 
     def get_representative(self):
         self.ensure_one()

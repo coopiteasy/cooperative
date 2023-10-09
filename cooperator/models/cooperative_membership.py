@@ -1,6 +1,7 @@
-# Copyright 2019 Coop IT Easy SCRL fs
-#   Houssine Bakkali <houssine@coopiteasy.be>
-# License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl.html).
+# SPDX-FileCopyrightText: 2019 Coop IT Easy SC
+# SPDX-FileContributor: Houssine Bakkali <houssine@coopiteasy.be>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 from odoo import api, fields, models
 
@@ -13,11 +14,21 @@ class CooperativeMembership(models.Model):
     _check_company_auto = True
     _sql_constraints = [
         (
-            "cooperative_membership_company_id_partner_id_key",
+            "company_id_partner_id_key",
             "unique (company_id, partner_id)",
-            "Only one cooperative membership record can exist per company per partner",
-        )
+            "Only one cooperative membership record can exist per partner (per company)",
+        ),
+        (
+            # "numbe" instead of "number" because the constraint name is
+            # appended to the table name and it must be 63 characters maximum.
+            # following the default postgresql naming by appending the column
+            # names and truncating before _key.
+            "company_id_cooperator_register_numbe_key",
+            "unique (company_id, cooperator_register_number)",
+            "A cooperator register number must be unique (per company)",
+        ),
     ]
+    _order = "cooperator_register_number"
 
     @api.depends("partner_id.share_ids")
     def _compute_effective_date(self):
@@ -45,7 +56,9 @@ class CooperativeMembership(models.Model):
                     break
             record.cooperator_type = share_type
 
-    @api.depends("partner_id.share_ids")
+    @api.depends(
+        "partner_id.share_ids.share_number", "partner_id.share_ids.share_unit_price"
+    )
     def _compute_share_info(self):
         for record in self:
             number_of_share = 0
@@ -118,10 +131,14 @@ class CooperativeMembership(models.Model):
         ondelete="cascade",
         index=True,
     )
+    name = fields.Char(related="partner_id.name")
+    is_company = fields.Boolean(related="partner_id.is_company", store=True)
+    email = fields.Char(related="partner_id.email")
     # todo: remove this. this was used on res.partner. the existence of a
     # cooperative.membership record should be enough.
     cooperator = fields.Boolean(
         help="Check this box if this contact is a cooperator (effective or not).",
+        readonly=True,
         copy=False,
     )
     member = fields.Boolean(
@@ -138,6 +155,7 @@ class CooperativeMembership(models.Model):
     old_member = fields.Boolean(
         string="Old cooperator",
         help="Check this box if this cooperator is no more an effective member.",
+        readonly=True,
     )
     share_ids = fields.One2many(
         "share.line",
@@ -146,17 +164,21 @@ class CooperativeMembership(models.Model):
         search=_search_share_ids,
     )
     cooperator_register_number = fields.Integer(
-        string="Cooperator Number", readonly=True, copy=False
+        string="Cooperator Number",
+        readonly=True,
+        copy=False,
+        group_operator=None,
     )
     number_of_share = fields.Integer(
         compute=_compute_share_info,
         string="Number of share",
+        store=True,
     )
     total_value = fields.Float(
         compute=_compute_share_info,
         string="Total value of shares",
+        store=True,
     )
-    # company_register_number = fields.Char(string="Company Register Number")
     cooperator_type = fields.Selection(
         selection=_get_share_type,
         compute=_compute_cooperator_type,
