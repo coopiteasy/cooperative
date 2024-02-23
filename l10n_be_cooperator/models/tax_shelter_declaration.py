@@ -2,8 +2,10 @@
 # SPDX-FileCopyrightText: 2018 Coop IT Easy SC
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from datetime import date
+from odoo import _,api, fields, models
+from odoo.exceptions import UserError
 
-from odoo import fields, models
 
 TYPE_MAP = {
     "subscription": "subscribed",
@@ -16,16 +18,25 @@ class TaxShelterDeclaration(models.Model):
     _name = "tax.shelter.declaration"
     _description = "Tax Shelter Declaration"
 
-    name = fields.Char(string="Declaration year", required=True)
-    fiscal_year = fields.Char(string="Fiscal year", required=True)
+    name = fields.Char(string="Declaration year", 
+                       required=True,
+                       compute="_compute_years",
+                       readonly=False)
+    fiscal_year = fields.Integer(string="Fiscal year", required=True,
+                              compute="_compute_years",
+                              readonly=True)
     tax_shelter_certificates = fields.One2many(
         "tax.shelter.certificate",
         "declaration_id",
         string="Tax shelter certificates",
         readonly=True,
     )
-    date_from = fields.Date(string="Date from", required=True)
-    date_to = fields.Date(string="Date to", required=True)
+    date_from = fields.Date(string="Date from", 
+                            required=True,
+                            default=date(date.today().year,1,1))
+    date_to = fields.Date(string="Date to", 
+                          required=True,
+                          default=date(date.today().year,12,31))
     month_from = fields.Char(string="Month from", required=True)
     month_to = fields.Char(string="Month to", required=True)
     tax_shelter_percentage = fields.Selection(
@@ -66,6 +77,12 @@ class TaxShelterDeclaration(models.Model):
         "Declaration. They will be marked "
         "as non eligible",
     )
+
+    @api.depends("date_from", "date_to")
+    def _compute_years(self):
+        for declaration in self:
+            declaration.fiscal_year = declaration.date_from.year
+            declaration.name = declaration.date_from.year + 1
 
     def _excluded_from_declaration(self, entry):
         if entry.date >= self.date_from and entry.date <= self.date_to:
@@ -130,6 +147,9 @@ class TaxShelterDeclaration(models.Model):
 
     def compute_declaration(self):
         self.ensure_one()
+        if self.date_from.year != self.date_to.year:
+            raise UserError(_('Dates should belong in the same year.'))   
+    
         entries = self.env["subscription.register"].search(
             [
                 ("partner_id.is_company", "=", False),

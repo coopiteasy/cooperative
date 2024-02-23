@@ -47,17 +47,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 <sheet>
                     <group>
                         <group>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                            <field name="fiscal_year" widget="char" />
                             <field name="name" />
-                            <field name="fiscal_year" />
+                        </group>
+                        <group>
                             <field name="tax_shelter_percentage" />
                             <field name="tax_shelter_capital_limit" />
                             <field name="previously_subscribed_capital" />
-                        </group>
-                        <group>
-                            <field name="date_from" />
-                            <field name="date_to" />
-                            <field name="month_from" />
-                            <field name="month_to" />
                         </group>
                     </group>
                     <notebook>
