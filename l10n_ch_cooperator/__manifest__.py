@@ -5,7 +5,7 @@
 {
     "name": "Cooperators Switzerland",
     "summary": "Cooperators Switzerland localization",
-    "version": "12.0.1.3.0",
+    "version": "13.0.1.0.0",
     "license": "AGPL-3",
     "depends": ["cooperator", "cooperator_website", "l10n_ch"],
     "author": "Coop IT Easy SC",
@@ -13,8 +13,6 @@
     "website": "https://coopiteasy.be",
     "data": [
         "views/subscription_template.xml",
-        # "views/subscription_request_view.xml",
     ],
-    "installable": True,
     "auto-install": True,
 }
