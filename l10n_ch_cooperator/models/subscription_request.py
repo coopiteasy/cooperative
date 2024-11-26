@@ -1,20 +1,13 @@
 from odoo import fields, models
 
+from . import res_partner
+
 
 class SubscriptionRequest(models.Model):
     _inherit = "subscription.request"
 
     company_type = fields.Selection(
-        selection_add=[
-            ("ei", "Individual company"),
-            ("snc", "Partnership"),
-            ("sa", "Limited company (SA)"),
-            ("sarl", "Limited liability company (Ltd)"),  # noqa
-            ("sc", "Cooperative"),
-            ("asso", "Association"),
-            ("fond", "Foundation"),
-            ("edp", "Company under public law"),
-        ]
+        selection_add=res_partner.get_company_type_selection()
     )
 
     def get_required_field(self):
